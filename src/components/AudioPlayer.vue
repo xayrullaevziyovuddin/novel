@@ -122,7 +122,8 @@ const onLoadedMetadata = () => {
 
 const onTimeUpdate = () => {
   if (audioRef.value) {
-    currentTime.value = audioRef.value.currentTime || 0
+    currentTime.value = audioRef.value.currentTime
+    // console.log('Time update:', audioRef.value.currentTime);
   }
 }
 
@@ -149,6 +150,7 @@ const onWaiting = () => {
 const onSeek = (event) => {
   if (audioRef.value) {
     const newTime = parseFloat(event.target.value)
+    console.log(`Seeking to: ${newTime}`);
     audioRef.value.currentTime = newTime
     currentTime.value = newTime
   }
