@@ -5,6 +5,11 @@
         <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
       </div>
       
+      <div v-else-if="error" class="text-center py-8 text-red-500">
+        <p>Произошла ошибка при загрузке главы:</p>
+        <p class="mt-2 text-sm text-gray-400">{{ error.message }}</p>
+      </div>
+
       <div v-else-if="chapter" class="max-w-4xl mx-auto">
         <div class="mb-6">
           <router-link 
@@ -90,6 +95,7 @@ const chapter = ref(null)
 const currentVolume = ref(null)
 const allChapters = ref([])
 const loading = ref(true)
+const error = ref(null)
 
 // Вычисляемые свойства для навигации
 const currentChapterIndex = computed(() => {
@@ -131,50 +137,38 @@ const handleAudioEnded = () => {
 }
 
 onMounted(async () => {
+  loading.value = true
+  error.value = null
   try {
-    // Загружаем текущую главу
-    const chapterResponse = await novelAPI.getChapter(route.params.id)
-    chapter.value = chapterResponse.data
+    const chapterId = parseInt(route.params.id)
     
-    // Загружаем все тома и главы для навигации
-    const volumesResponse = await novelAPI.getVolumes()
+    // Загружаем главу и все тома параллельно
+    const [chapterResponse, volumesResponse] = await Promise.all([
+      novelAPI.getChapter(chapterId),
+      novelAPI.getVolumes()
+    ])
+
+    chapter.value = chapterResponse.data
     const volumes = volumesResponse.data.results || volumesResponse.data
     
-    // Находим том текущей главы и все главы
+    // Находим том и список глав для текущей главы
     for (const volume of volumes) {
-      const chapterInVolume = volume.chapters.find(ch => ch.id === parseInt(route.params.id))
-      if (chapterInVolume) {
+      if (volume.chapters.some(ch => ch.id === chapterId)) {
         currentVolume.value = volume
-        allChapters.value = volume.chapters
+        // Сортируем главы по порядку, если они не отсортированы
+        allChapters.value = [...volume.chapters].sort((a, b) => a.id - b.id)
         break
       }
     }
-    
-    // Если не нашли в текущем подходе, загружаем все главы отдельно
-    if (allChapters.value.length === 0) {
-      const chaptersResponse = await novelAPI.getChapters()
-      allChapters.value = chaptersResponse.data.results || chaptersResponse.data
-      
-      // Находим том для текущей главы
-      const chaptersResponseAll = await novelAPI.getChapters()
-      const allChaptersData = chaptersResponseAll.data.results || chaptersResponseAll.data
-      
-      // Находим том текущей главы
-      const volumesResponse2 = await novelAPI.getVolumes()
-      const volumesData = volumesResponse2.data.results || volumesResponse2.data
-      
-      for (const volume of volumesData) {
-        if (volume.chapters.some(ch => ch.id === parseInt(route.params.id))) {
-          currentVolume.value = volume
-          allChapters.value = volume.chapters
-          break
-        }
-      }
+
+    if (!currentVolume.value) {
+      console.warn("Том для главы не найден. Навигация может быть неполной.")
+      // Можно попытаться загрузить все главы как запасной вариант, если это необходимо
     }
     
-  } catch (error) {
-    console.error('Ошибка загрузки главы:', error)
-    console.error('Error response:', error.response)
+  } catch (err) {
+    console.error('Ошибка загрузки главы:', err)
+    error.value = err
   } finally {
     loading.value = false
   }
